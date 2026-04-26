@@ -40,6 +40,13 @@ public interface WaitlistService {
      */
     void notifyNextInWaitlist(UUID resourceId, LocalDate date, LocalTime startTime, LocalTime endTime);
 
+    /**
+     * Called by BookingServiceImpl after a booking is cancelled.
+     * Automatically promotes the first WAITING entry for that slot into a new
+     * PENDING booking for admin approval.
+     */
+    void autoCreateBookingForNextWaitlist(UUID resourceId, LocalDate date, LocalTime startTime, LocalTime endTime);
+
     /** Get count of active (WAITING + NOTIFIED) entries for a user (for badge display). */
     long getActiveCountForUser(UUID userId);
 }

@@ -309,6 +309,69 @@ public class WaitlistServiceImpl implements WaitlistService {
     }
 
     @Override
+    public void autoCreateBookingForNextWaitlist(UUID resourceId, LocalDate date,
+                                                 LocalTime startTime, LocalTime endTime) {
+        waitlistRepository.findFirstWaiting(resourceId, date, startTime, endTime)
+                .ifPresent(entry -> {
+                    List<Booking> conflicts = bookingRepository.findConflictingBookings(
+                            resourceId, date, startTime, endTime);
+
+                    if (!conflicts.isEmpty()) {
+                        log.warn("Skipped waitlist auto-promotion for entry {} due to {} conflict(s)",
+                                entry.getId(), conflicts.size());
+                        return;
+                    }
+
+                    Booking booking = Booking.builder()
+                            .resourceId(entry.getResourceId())
+                            .resourceName(entry.getResourceName())
+                            .resourceLocation(entry.getResourceLocation())
+                            .userId(entry.getUserId())
+                            .userEmail(entry.getUserEmail())
+                            .userName(entry.getUserName())
+                            .date(entry.getDate())
+                            .startTime(entry.getStartTime())
+                            .endTime(entry.getEndTime())
+                            .purpose(entry.getPurpose())
+                            .expectedAttendees(entry.getExpectedAttendees())
+                            .status(BookingStatus.PENDING)
+                            .build();
+
+                    booking = bookingRepository.save(booking);
+
+                    entry.setStatus(WaitlistStatus.CONFIRMED);
+                    entry.setNotifiedAt(LocalDateTime.now());
+                    entry.setExpiresAt(null);
+                    waitlistRepository.save(entry);
+
+                    notificationService.notify(
+                            entry.getUserId(),
+                            NotificationType.BOOKING_REQUEST,
+                            "Waitlist Moved to Booking Queue",
+                            "A slot became available for \"" + entry.getResourceName() +
+                                    "\" on " + entry.getDate() + " (" +
+                                    entry.getStartTime() + " - " + entry.getEndTime() +
+                                    "). Your request has been moved automatically and is now PENDING admin approval.",
+                            booking.getId(),
+                            ReferenceType.BOOKING
+                    );
+
+                    notificationService.notifyAllAdmins(
+                            NotificationType.BOOKING_REQUEST,
+                            "New Booking Request (Auto from Waitlist)",
+                            entry.getUserName() + " was auto-promoted from waitlist for \"" +
+                                    entry.getResourceName() + "\" on " + entry.getDate() +
+                                    " (" + entry.getStartTime() + " - " + entry.getEndTime() + ").",
+                            booking.getId(),
+                            ReferenceType.BOOKING
+                    );
+
+                    log.info("Auto-promoted waitlist entry {} to booking {} for user {}",
+                            entry.getId(), booking.getId(), entry.getUserEmail());
+                });
+    }
+
+    @Override
     public long getActiveCountForUser(UUID userId) {
         return waitlistRepository.countActiveForUser(userId);
     }
