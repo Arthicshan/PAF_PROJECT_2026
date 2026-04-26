@@ -220,7 +220,7 @@ public class BookingServiceImpl implements BookingService {
                 ReferenceType.BOOKING
         );
 
-        waitlistService.notifyNextInWaitlist(
+        waitlistService.autoCreateBookingForNextWaitlist(
                 booking.getResourceId(),
                 booking.getDate(),
                 booking.getStartTime(),
@@ -243,7 +243,19 @@ public class BookingServiceImpl implements BookingService {
             throw new IllegalArgumentException("Only PENDING bookings can be deleted.");
         }
 
+                UUID resourceId = booking.getResourceId();
+                LocalDate date = booking.getDate();
+                var startTime = booking.getStartTime();
+                var endTime = booking.getEndTime();
+
         bookingRepository.delete(booking);
+
+                waitlistService.autoCreateBookingForNextWaitlist(
+                                resourceId,
+                                date,
+                                startTime,
+                                endTime
+                );
     }
 
     private Booking findBookingOrThrow(UUID id) {
